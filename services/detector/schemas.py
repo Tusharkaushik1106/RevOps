@@ -1,6 +1,13 @@
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
+
+
+class DetectionState(StrEnum):
+    NORMAL = "normal"
+    ANOMALY = "anomaly"
+    INCIDENT = "incident"
 
 
 class ObservableInput(BaseModel):
@@ -29,6 +36,11 @@ class CohortEvidence(BaseModel):
     relative_delta: float
     revenue_exposure_minor: int
     evidence_score: float
+    expected_affected_volume: int = 0
+    excess_failures: float = 0
+    effect_size: float = 0
+    economic_contribution: float = 0
+    significance: str = "insufficient"
 
 
 class RevenueImpact(BaseModel):
@@ -41,6 +53,7 @@ class RevenueImpact(BaseModel):
 
 
 class IncidentEvidencePacket(BaseModel):
+    state: DetectionState = DetectionState.NORMAL
     incident_detected: bool
     confidence: float
     detection_timestamp: datetime | None = None
@@ -53,3 +66,5 @@ class IncidentEvidencePacket(BaseModel):
     supporting_signals: dict[str, str] = Field(default_factory=dict)
     detector_version: str = "phase2-statistical-v1"
     metric_kind: str = "payment_success"
+    diagnostics: dict[str, float] = Field(default_factory=dict)
+    top_cohorts: list[CohortEvidence] = Field(default_factory=list)

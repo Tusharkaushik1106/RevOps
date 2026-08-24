@@ -89,6 +89,7 @@ class Simulator:
                             event_id=f"checkout_{i:06d}_started",
                             event_type=EventType.CHECKOUT_STARTED,
                             timestamp=t,
+                            payment_id=pid,
                             merchant_id=m.merchant_id,
                             customer_id=c.customer_id,
                             amount_minor=amount,
@@ -97,18 +98,23 @@ class Simulator:
                             event_id=f"checkout_{i:06d}_page",
                             event_type=EventType.PAYMENT_PAGE_VIEWED,
                             timestamp=t + timedelta(seconds=1),
+                            payment_id=pid,
                             merchant_id=m.merchant_id,
                             customer_id=c.customer_id,
                             amount_minor=amount,
                         ),
                     ]
                 )
-                if affected or self.rng.random() < 0.05:
+                in_window = inc is not None and inc.start_time <= t <= inc.end_time
+                if (in_window and self.rng.random() < scenario.abandonment_multiplier * 0.05) or (
+                    not in_window and self.rng.random() < 0.05
+                ):
                     ev.append(
                         PaymentEvent(
                             event_id=f"checkout_{i:06d}_abandoned",
                             event_type=EventType.CHECKOUT_ABANDONED,
                             timestamp=t + timedelta(seconds=2),
+                            payment_id=pid,
                             merchant_id=m.merchant_id,
                             customer_id=c.customer_id,
                             amount_minor=amount,
@@ -144,7 +150,7 @@ class Simulator:
                         attributes={"subscription_id": sub.subscription_id},
                     )
                 )
-        truth = [self._truth(inc, ps)] if inc else []
+        truth = [self._truth(inc, ps, ev)] if inc else []
         return SimulationResult(
             merchants=ms,
             customers=cs,
@@ -284,7 +290,86 @@ class Simulator:
         )
         return [a, b]
 
-    def _truth(self, inc, ps):
+    def _truth(self, inc, ps, ev):
+        if inc.incident_type == IncidentType.CHECKOUT_ABANDONMENT:
+            in_window = [
+                e
+                for e in ev
+                if e.event_type == EventType.CHECKOUT_STARTED
+                and inc.start_time <= e.timestamp <= inc.end_time
+            ]
+            outside = [
+                e
+                for e in ev
+                if e.event_type == EventType.CHECKOUT_STARTED
+                and not inc.start_time <= e.timestamp <= inc.end_time
+            ]
+            abandoned = {e.payment_id for e in ev if e.event_type == EventType.CHECKOUT_ABANDONED}
+            abandoned_window = sum(e.payment_id in abandoned for e in in_window)
+            abandoned_outside = sum(e.payment_id in abandoned for e in outside)
+            baseline = abandoned_outside / len(outside) if outside else 0
+            incident = abandoned_window / len(in_window) if in_window else 0
+            exposed = sum(e.amount_minor for e in in_window if e.payment_id in abandoned)
+            return IncidentGroundTruth(
+                incident_id=inc.incident_id,
+                incident_type=inc.incident_type,
+                actual_root_cause=inc.incident_type.value,
+                affected_dimensions=inc.affected_dimensions,
+                affected_cohort=inc.affected_dimensions,
+                start_time=inc.start_time,
+                end_time=inc.end_time,
+                severity=inc.severity,
+                baseline_expected_success=0,
+                incident_success=0,
+                affected_transaction_count=0,
+                baseline_expected_revenue_minor=0,
+                observed_revenue_minor=0,
+                revenue_exposure_minor=exposed,
+                revenue_loss_minor=exposed,
+                metric_kind="checkout_abandonment",
+                baseline_abandonment_rate=baseline,
+                incident_abandonment_rate=incident,
+                incremental_abandonment_rate=incident - baseline,
+                affected_checkout_count=len(in_window),
+            )
+        if inc.incident_type == IncidentType.SUBSCRIPTION_RENEWAL:
+            renewals = [
+                e
+                for e in ev
+                if e.event_type == EventType.RENEWAL_ATTEMPTED
+                and inc.start_time <= e.timestamp <= inc.end_time
+            ]
+            amounts = [e.amount_minor for e in renewals]
+            observed = sum(
+                e.amount_minor
+                for e in ev
+                if e.event_type == EventType.RENEWAL_SUCCESS
+                and inc.start_time <= e.timestamp <= inc.end_time
+            )
+            baseline = expected_revenue(amounts, 0.94)
+            return IncidentGroundTruth(
+                incident_id=inc.incident_id,
+                incident_type=inc.incident_type,
+                actual_root_cause=inc.incident_type.value,
+                affected_dimensions=inc.affected_dimensions,
+                affected_cohort=inc.affected_dimensions,
+                start_time=inc.start_time,
+                end_time=inc.end_time,
+                severity=inc.severity,
+                baseline_expected_success=0.94,
+                incident_success=observed / sum(amounts) if amounts else 0,
+                affected_transaction_count=0,
+                baseline_expected_revenue_minor=baseline,
+                observed_revenue_minor=observed,
+                revenue_exposure_minor=revenue_exposure(amounts),
+                revenue_loss_minor=revenue_loss(baseline, observed),
+                metric_kind="subscription_renewal",
+                baseline_expected_renewal_revenue_minor=baseline,
+                observed_renewal_revenue_minor=observed,
+                renewal_revenue_loss_minor=revenue_loss(baseline, observed),
+                renewal_revenue_exposure_minor=revenue_exposure(amounts),
+                affected_renewal_count=len(renewals),
+            )
         cohort = [
             p
             for p in ps

@@ -68,6 +68,7 @@ class IncidentEvidencePacket(BaseModel):
     metric_kind: str = "payment_success"
     diagnostics: dict[str, float] = Field(default_factory=dict)
     top_cohorts: list[CohortEvidence] = Field(default_factory=list)
+    attribution: dict = Field(default_factory=dict)
 
 
 class ConfirmationTrace(BaseModel):

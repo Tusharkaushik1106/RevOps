@@ -64,6 +64,9 @@ class AggregateEngine:
         "device_type",
         "geo",
         "failure_code",
+        "issuer__payment_method",
+        "issuer__gateway",
+        "gateway__payment_method",
     )
 
     def build(self, buckets: list[Bucket]) -> IndexedAggregates:
@@ -83,6 +86,13 @@ class AggregateEngine:
                 overall.failed_value += amount if status == "failed" else 0
                 for dim in self.DIMENSIONS:
                     value = event.get(dim) or event.get("attributes", {}).get(dim)
+                    attrs = event.get("attributes", {})
+                    if dim == "issuer__payment_method":
+                        value = f"{event.get('issuer') or attrs.get('issuer')}|{event.get('payment_method') or attrs.get('payment_method')}"
+                    elif dim == "issuer__gateway":
+                        value = f"{event.get('issuer') or attrs.get('issuer')}|{event.get('gateway') or attrs.get('gateway')}"
+                    elif dim == "gateway__payment_method":
+                        value = f"{event.get('gateway') or attrs.get('gateway')}|{event.get('payment_method') or attrs.get('payment_method')}"
                     if value is None:
                         continue
                     result.by_dimension[dim].setdefault(str(value), {}).setdefault(

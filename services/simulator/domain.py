@@ -163,6 +163,16 @@ class IncidentGroundTruth(BaseModel):
     observed_revenue_minor: int
     revenue_exposure_minor: int
     revenue_loss_minor: int
+    metric_kind: str = "payment_success"
+    baseline_abandonment_rate: float | None = None
+    incident_abandonment_rate: float | None = None
+    incremental_abandonment_rate: float | None = None
+    affected_checkout_count: int = 0
+    baseline_expected_renewal_revenue_minor: int = 0
+    observed_renewal_revenue_minor: int = 0
+    renewal_revenue_loss_minor: int = 0
+    renewal_revenue_exposure_minor: int = 0
+    affected_renewal_count: int = 0
 
 
 class Intervention(BaseModel):

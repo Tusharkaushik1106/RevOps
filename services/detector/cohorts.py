@@ -23,6 +23,12 @@ def rank_cohorts(
             obs = aggregate([r for r in observed_rows if str(r.get(dimension)) == value])
             delta = base.success_rate - obs.success_rate
             if obs.transaction_count >= 20 and delta > 0.02:
+                excess_failures = max(
+                    0, obs.transaction_count * base.success_rate - obs.success_count
+                )
+                contribution = excess_failures * (
+                    obs.total_value_minor / obs.transaction_count if obs.transaction_count else 0
+                )
                 output.append(
                     CohortEvidence(
                         dimension=dimension,
@@ -34,6 +40,13 @@ def rank_cohorts(
                         relative_delta=delta / base.success_rate if base.success_rate else 0,
                         revenue_exposure_minor=obs.failed_value_minor,
                         evidence_score=min(1, delta * 3) * min(1, obs.transaction_count / 100),
+                        expected_affected_volume=round(obs.transaction_count * base.success_rate),
+                        excess_failures=excess_failures,
+                        effect_size=delta,
+                        economic_contribution=contribution,
+                        significance="strong"
+                        if obs.transaction_count >= 50 and delta >= 0.08
+                        else "moderate",
                     )
                 )
     return sorted(output, key=lambda x: x.evidence_score, reverse=True)

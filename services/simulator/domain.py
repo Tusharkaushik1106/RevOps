@@ -173,6 +173,7 @@ class IncidentGroundTruth(BaseModel):
     renewal_revenue_loss_minor: int = 0
     renewal_revenue_exposure_minor: int = 0
     affected_renewal_count: int = 0
+    calibration_affected_payment_ids: list[str] = Field(default_factory=list)
 
 
 class Intervention(BaseModel):

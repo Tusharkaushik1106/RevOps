@@ -1,4 +1,6 @@
 from functools import lru_cache
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,10 +14,14 @@ class Settings(BaseSettings):
     razorpay_key_secret: str | None = None
     llm_provider: str = "disabled"
     llm_api_key: str | None = None
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.0-flash"
     supabase_url: str | None = None
     supabase_anon_key: str | None = None
     cors_origins: list[str] = ["http://localhost:3000"]
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).resolve().parents[3] / ".env", extra="ignore"
+    )
 
 
 @lru_cache

@@ -68,3 +68,21 @@ class IncidentEvidencePacket(BaseModel):
     metric_kind: str = "payment_success"
     diagnostics: dict[str, float] = Field(default_factory=dict)
     top_cohorts: list[CohortEvidence] = Field(default_factory=list)
+    attribution: dict = Field(default_factory=dict)
+
+
+class ConfirmationTrace(BaseModel):
+    bucket_start: datetime
+    state_before: str
+    state_after: str
+    global_success_rate: float
+    baseline_success_rate: float | None = None
+    baseline_confidence: str = "insufficient"
+    global_deviation: float = 0
+    sample_size: int = 0
+    financial_materiality_minor: int = 0
+    persistence_count: int = 0
+    top_affected_cohort: str | None = None
+    cohort_effect: float = 0
+    cohort_contribution: float = 0
+    confidence_components: dict[str, float] = Field(default_factory=dict)

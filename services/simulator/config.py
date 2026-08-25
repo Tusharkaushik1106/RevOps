@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 from .domain import Gateway, IncidentType, Issuer, PaymentMethod
 
@@ -11,6 +13,14 @@ class ScenarioConfig(BaseModel):
     start_fraction: float = 0.45
     duration_fraction: float = 0.2
     abandonment_multiplier: float = 2.0
+    incident_start: datetime | None = None
+    incident_end: datetime | None = None
+    affected_share: float | None = Field(default=None, ge=0, le=1)
+    target_success_rate: float | None = Field(default=None, ge=0, le=1)
+    affected_dimensions: dict[str, str] = Field(default_factory=dict)
+    target_interaction: dict[str, str] = Field(default_factory=dict)
+    minimum_affected_events: int = 0
+    minimum_interaction_events: int = 0
 
 
 SCENARIOS = {

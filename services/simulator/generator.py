@@ -36,11 +36,34 @@ class Simulator:
         ]
         ps = []
         ev = []
+        calibration_affected_ids = []
         inc = self._incident(start, end, scenario)
+        generated_times = [start + (end - start) * self.rng.random() for _ in range(payments_count)]
+        calibration_assignments = set()
+        calibration_success_assignments = set()
+        if scenario and scenario.affected_share is not None and inc:
+            eligible_indices = [
+                i
+                for i, timestamp in enumerate(generated_times)
+                if inc.start_time <= timestamp <= inc.end_time
+            ]
+            quota = round(len(eligible_indices) * scenario.affected_share)
+            if quota < scenario.minimum_affected_events:
+                raise ValueError(
+                    f"Calibration scenario infeasible: eligible events {len(eligible_indices)} cannot satisfy minimum affected events"
+                )
+            calibration_assignments = set(self.rng.sample(eligible_indices, quota))
+            target_successes = round(
+                len(calibration_assignments)
+                * (scenario.target_success_rate or scenario.incident_success_rate)
+            )
+            calibration_success_assignments = set(
+                self.rng.sample(list(calibration_assignments), target_successes)
+            )
         for i in range(payments_count):
             m = self.rng.choices(ms, weights=[x.baseline_daily_volume for x in ms])[0]
             c = self.rng.choice([x for x in cs if x.merchant_id == m.merchant_id])
-            t = start + (end - start) * self.rng.random()
+            t = generated_times[i]
             amount = max(
                 100, round(self.rng.lognormvariate(math.log(m.average_order_value_minor), 0.65))
             )
@@ -49,10 +72,39 @@ class Simulator:
                 list(m.gateway_distribution), weights=list(m.gateway_distribution.values())
             )[0]
             issuer = self.rng.choice(list(Issuer))
+            calibration_window = bool(
+                scenario
+                and scenario.affected_share is not None
+                and inc
+                and inc.start_time <= t <= inc.end_time
+            )
+            calibration_affected = calibration_window and i in calibration_assignments
+            if calibration_affected:
+                for dimension, value in scenario.affected_dimensions.items():
+                    if dimension == "issuer":
+                        issuer = Issuer(value)
+                    if dimension == "payment_method":
+                        method = PaymentMethod(value)
+                if scenario.target_interaction:
+                    for dimension, value in scenario.target_interaction.items():
+                        if dimension == "issuer":
+                            issuer = Issuer(value)
+                        if dimension == "payment_method":
+                            method = PaymentMethod(value)
             rate = self._rate(method, g, issuer)
             affected = self._affected(inc, m, method, g, issuer, t)
-            success = self.rng.random() < (
-                inc.parameters.get("incident_success_rate", rate) if affected and inc else rate
+            affected = affected or calibration_affected
+            success_rate = (
+                scenario.target_success_rate
+                if calibration_affected and scenario and scenario.target_success_rate is not None
+                else (
+                    inc.parameters.get("incident_success_rate", rate) if affected and inc else rate
+                )
+            )
+            success = (
+                (i in calibration_success_assignments)
+                if calibration_affected
+                else self.rng.random() < success_rate
             )
             status = PaymentStatus.SUCCESS if success else PaymentStatus.FAILED
             fail = (
@@ -63,6 +115,8 @@ class Simulator:
                 )
             )
             pid = f"payment_{i:06d}"
+            if calibration_affected:
+                calibration_affected_ids.append(pid)
             oid = f"order_{i:06d}"
             p = Payment(
                 payment_id=pid,
@@ -150,7 +204,16 @@ class Simulator:
                         attributes={"subscription_id": sub.subscription_id},
                     )
                 )
-        truth = [self._truth(inc, ps, ev)] if inc else []
+        if (
+            scenario
+            and scenario.affected_share is not None
+            and len(calibration_affected_ids)
+            < max(scenario.minimum_affected_events, scenario.minimum_interaction_events)
+        ):
+            raise ValueError(
+                f"Calibration scenario infeasible: affected events {len(calibration_affected_ids)} < required {scenario.minimum_affected_events}"
+            )
+        truth = [self._truth(inc, ps, ev, calibration_affected_ids)] if inc else []
         return SimulationResult(
             merchants=ms,
             customers=cs,
@@ -243,14 +306,15 @@ class Simulator:
     def _incident(self, s, e, c):
         if not c:
             return None
-        a = s + (e - s) * c.start_fraction
+        a = c.incident_start or s + (e - s) * c.start_fraction
+        incident_end = c.incident_end or a + (e - s) * c.duration_fraction
         return Incident(
             incident_id="incident_000",
             incident_type=c.incident_type,
             start_time=a,
-            end_time=a + (e - s) * c.duration_fraction,
+            end_time=incident_end,
             severity=c.severity,
-            affected_dimensions={"target": str(c.target)},
+            affected_dimensions=c.affected_dimensions or {"target": str(c.target)},
             parameters=c.model_dump(),
         )
 
@@ -290,7 +354,7 @@ class Simulator:
         )
         return [a, b]
 
-    def _truth(self, inc, ps, ev):
+    def _truth(self, inc, ps, ev, calibration_affected_ids=None):
         if inc.incident_type == IncidentType.CHECKOUT_ABANDONMENT:
             in_window = [
                 e
@@ -331,6 +395,7 @@ class Simulator:
                 incident_abandonment_rate=incident,
                 incremental_abandonment_rate=incident - baseline,
                 affected_checkout_count=len(in_window),
+                calibration_affected_payment_ids=calibration_affected_ids or [],
             )
         if inc.incident_type == IncidentType.SUBSCRIPTION_RENEWAL:
             renewals = [
@@ -369,6 +434,7 @@ class Simulator:
                 renewal_revenue_loss_minor=revenue_loss(baseline, observed),
                 renewal_revenue_exposure_minor=revenue_exposure(amounts),
                 affected_renewal_count=len(renewals),
+                calibration_affected_payment_ids=calibration_affected_ids or [],
             )
         cohort = [
             p
@@ -404,4 +470,5 @@ class Simulator:
             observed_revenue_minor=obs,
             revenue_exposure_minor=revenue_exposure(amounts),
             revenue_loss_minor=revenue_loss(base, obs),
+            calibration_affected_payment_ids=calibration_affected_ids or [],
         )

@@ -1,4 +1,5 @@
 from typing import Protocol
+
 from .schemas import Incident, PaymentEvent, PolicyDecision, RecoveryAction
 
 

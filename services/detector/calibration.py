@@ -69,7 +69,7 @@ def canonical_world(seed: int, incident_success: float | None, daily_payments: i
 
 def run_calibration(severity: str, seed: int = 42, daily_payments: int = 2000) -> CalibrationResult:
     history, evaluation = canonical_world(seed, SEVERITIES[severity], daily_payments)
-    shadow = SequentialShadowEvaluator(15)
+    shadow = SequentialShadowEvaluator(5)
     observations = shadow.run(observable(history), observable(evaluation))
     incidents = [o for o in observations if o.state == "incident"]
     top = incidents[0].trace.top_affected_cohort if incidents else None

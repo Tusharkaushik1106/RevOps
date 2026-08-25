@@ -3,6 +3,7 @@ import sys
 
 from services.simulator.io import load
 
+from .authoritative import run_authoritative
 from .detector import IncidentDetector
 from .schemas import ObservableInput
 
@@ -14,7 +15,14 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run")
     run.add_argument("--file", required=True)
+    evaluate = sub.add_parser("evaluate")
+    evaluate.add_argument("--payments", type=int, default=2000)
     args = parser.parse_args()
+    if args.command == "evaluate":
+        import json
+
+        print(json.dumps(run_authoritative(payments=args.payments), default=str, indent=2))
+        return
     result = load(args.file)
     observable = ObservableInput(
         payments=[p.model_dump(mode="json") for p in result.payments],

@@ -54,7 +54,12 @@ class IncidentAttributor:
 
     def update(self, current: dict[str, dict[str, Aggregate]]) -> AttributionResult:
         for dimension, values in current.items():
-            for value, metric in values.items():
+            if dimension not in self.incident:
+                continue
+            for value, bucket_metrics in values.items():
+                metric = Aggregate()
+                for bucket_metric in bucket_metrics.values():
+                    self._add(metric, bucket_metric)
                 self._add(self.incident[dimension].setdefault(value, Aggregate()), metric)
         candidates = []
         total = 0

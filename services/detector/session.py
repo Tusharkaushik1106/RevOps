@@ -60,7 +60,9 @@ class DetectorSession:
             if baseline is None or current.transaction_count < 20
             else min(1, max(0, (baseline - current.success_rate) * 5))
         )
-        score = max(global_score, cohort_score)
+        # Detection confirmation is intentionally independent of attribution.
+        # Cohort evidence is recorded for diagnostics and activated only after INCIDENT.
+        score = global_score
         before = self.context.state.value
         self.context = self.machine.observe(self.context, score, bucket.bucket_start)
         self.evaluation_count += 1

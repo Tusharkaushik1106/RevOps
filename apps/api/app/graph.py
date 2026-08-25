@@ -1,5 +1,8 @@
 """LangGraph orchestration skeleton; nodes are intentionally placeholders."""
+
+from itertools import pairwise
 from typing import TypedDict
+
 from langgraph.graph import END, START, StateGraph
 
 
@@ -22,11 +25,23 @@ def placeholder_node(state: IncidentState) -> IncidentState:
 
 def build_graph():
     graph = StateGraph(IncidentState)
-    stages = ["detect_incident", "gather_evidence", "generate_hypotheses", "validate_hypotheses", "estimate_revenue_at_risk", "generate_candidate_actions", "score_candidate_actions", "policy_check", "execute", "observe_outcome", "recalculate"]
+    stages = [
+        "detect_incident",
+        "gather_evidence",
+        "generate_hypotheses",
+        "validate_hypotheses",
+        "estimate_revenue_at_risk",
+        "generate_candidate_actions",
+        "score_candidate_actions",
+        "policy_check",
+        "execute",
+        "observe_outcome",
+        "recalculate",
+    ]
     for stage in stages:
         graph.add_node(stage, placeholder_node)
     graph.add_edge(START, stages[0])
-    for current, following in zip(stages, stages[1:]):
+    for current, following in pairwise(stages):
         graph.add_edge(current, following)
     graph.add_edge(stages[-1], END)
     return graph.compile()

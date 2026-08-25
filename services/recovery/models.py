@@ -23,6 +23,23 @@ class RecoveryAssumption(BaseModel):
     description: str = ""
 
 
+class EvidenceProvenance(BaseModel):
+    source: str
+    sample_size: int = 0
+    metric: str
+    value: float | int
+    confidence: str = "medium"
+    comparable_dimensions: dict[str, str] = Field(default_factory=dict)
+
+
+class EstimateRange(BaseModel):
+    expected: int
+    lower: int
+    upper: int
+    confidence: str = "heuristic"
+    method: str = "deterministic interval around expected value"
+
+
 class EconomicImpact(BaseModel):
     incident_revenue_loss_minor: int = 0
     counterfactual_revenue_loss_minor: int = 0
@@ -46,6 +63,9 @@ class CounterfactualScenario(BaseModel):
     assumptions: list[RecoveryAssumption] = Field(default_factory=list)
     impact: EconomicImpact = Field(default_factory=EconomicImpact)
     risk: RiskAssessment | None = None
+    estimate_range: EstimateRange | None = None
+    evidence_used: list[EvidenceProvenance] = Field(default_factory=list)
+    dominated: bool = False
 
 
 class CounterfactualResult(BaseModel):
@@ -54,3 +74,5 @@ class CounterfactualResult(BaseModel):
     recommended_scenario_id: str | None = None
     recommendation_reason: str = ""
     audit_trace: list[dict] = Field(default_factory=list)
+    pareto_scenario_ids: list[str] = Field(default_factory=list)
+    decision_policy: str = "maximize_recovery_under_risk_limit"

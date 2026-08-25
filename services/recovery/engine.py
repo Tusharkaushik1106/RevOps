@@ -1,11 +1,17 @@
 from services.detector.schemas import IncidentEvidencePacket
 
 from .models import *
+from .policy import DecisionPolicy, choose
 
 
 class CounterfactualEngine:
-    def __init__(self, risk_threshold: float = 0.65):
+    def __init__(
+        self,
+        risk_threshold: float = 0.65,
+        policy: DecisionPolicy = DecisionPolicy.MAXIMIZE_RECOVERY_UNDER_RISK_LIMIT,
+    ):
         self.risk_threshold = risk_threshold
+        self.policy = policy
 
     def run(
         self,
@@ -36,15 +42,27 @@ class CounterfactualEngine:
             self._retry(packet, loss, observation_minutes),
             self._target(packet, loss, observation_minutes),
         ]
-        eligible = [s for s in scenarios if s.risk and s.risk.score <= self.risk_threshold]
-        best = max(
-            eligible, key=lambda s: s.impact.expected_recovered_revenue_minor, default=scenarios[0]
-        )
+        pareto = []
+        for scenario in scenarios:
+            value = scenario.impact.expected_recovered_revenue_minor
+            scenario.estimate_range = EstimateRange(
+                expected=value, lower=round(value * 0.85), upper=round(value * 1.15)
+            )
+            scenario.dominated = any(
+                other.impact.expected_recovered_revenue_minor >= value
+                and other.risk.score <= scenario.risk.score
+                and other.scenario_id != scenario.scenario_id
+                for other in scenarios
+            )
+            pareto.append(scenario.scenario_id) if not scenario.dominated else None
+        best = choose(scenarios, self.policy, self.risk_threshold)
         return CounterfactualResult(
             incident_id=incident_id,
             scenarios=scenarios,
             recommended_scenario_id=best.scenario_id,
-            recommendation_reason=f"Selected highest expected recovered revenue under risk threshold {self.risk_threshold:.0%}.",
+            recommendation_reason=f"Selected highest expected recovered revenue under {self.policy.value} and risk threshold {self.risk_threshold:.0%}.",
+            pareto_scenario_ids=pareto,
+            decision_policy=self.policy.value,
             audit_trace=[
                 {
                     "stage": "counterfactual_simulation",

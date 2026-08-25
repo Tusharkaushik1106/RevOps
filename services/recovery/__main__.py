@@ -34,12 +34,12 @@ def main():
     print("COUNTERFACTUAL RECOVERY\n")
     [
         print(
-            f"{s.label}: recovered={s.impact.expected_recovered_revenue_minor} residual={s.impact.residual_loss_minor} risk={s.risk.level.value}"
+            f"{s.label}: recovered={s.impact.expected_recovered_revenue_minor} range={s.estimate_range.lower if s.estimate_range else 0}-{s.estimate_range.upper if s.estimate_range else 0} residual={s.impact.residual_loss_minor} risk={s.risk.level.value}"
         )
         for s in result.scenarios
     ]
     print(
-        f"Recommended: {result.recommended_scenario_id}\n{result.recommendation_reason}\nNo financial action executed."
+        f"Pareto frontier: {', '.join(result.pareto_scenario_ids)}\nRecommended: {result.recommended_scenario_id}\n{result.recommendation_reason}\nNo financial action executed."
     )
 
 
